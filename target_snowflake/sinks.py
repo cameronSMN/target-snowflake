@@ -166,7 +166,6 @@ class SnowflakeSink(SQLSink):
 
         batches = batcher.get_batches(records=processed_records)
         for files in batches:
-            print(files)
             self.insert_batch_files_via_internal_stage(
                 full_table_name=full_table_name,
                 files=files,
@@ -230,11 +229,11 @@ class SnowflakeSink(SQLSink):
             self.connector.drop_file_format(file_format=file_format)
             self.connector.remove_staged_files(sync_id=sync_id)
             # clean up local files
-            if self.config.get("clean_up_batch_files"):
-                for file_url in files:
-                    file_path = urlparse(file_url).path
-                    if os.path.exists(file_path):  # noqa: PTH110
-                        os.remove(file_path)  # noqa: PTH107
+            # if self.config.get("clean_up_batch_files"):
+            #     for file_url in files:
+            #         file_path = urlparse(file_url).path
+            #         if os.path.exists(file_path):  # noqa: PTH110
+            #             os.remove(file_path)  # noqa: PTH107
 
     def process_batch_files(
         self,

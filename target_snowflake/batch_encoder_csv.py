@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import decimal
 import typing as t
 from uuid import uuid4
 from target_snowflake import flattening
@@ -16,6 +17,12 @@ from singer_sdk.helpers._batch import (
 
 __all__ = ["CSVBatcher"]
 
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, decimal.Decimal):
+            return str(o)
+        return super().default(o)
 
 class CSVBatcher(BaseBatcher):
     """CSV Record Batcher."""
@@ -34,7 +41,7 @@ class CSVBatcher(BaseBatcher):
             batch_config=batch_config,
         )
 
-    def __record_to_csv_line(self, record: dict,
+    def _record_to_csv_line(self, record: dict,
                         schema: dict,
                         data_flattening_max_level: int = 0) -> str:
         """
@@ -49,12 +56,11 @@ class CSVBatcher(BaseBatcher):
             string of csv line
         """
         flatten_record = flattening.flatten_record(record, schema, max_level=data_flattening_max_level)
-
         return ','.join(
             [
-                json.dumps(flatten_record[column], ensure_ascii=False) if column in flatten_record and (
+                json.dumps(flatten_record[column], ensure_ascii=False, cls=DecimalEncoder) if column in flatten_record and (
                         flatten_record[column] == 0 or flatten_record[column]) else ''
-                for column in schema
+                for column, meta in schema["properties"].items()
             ]
         )
 
@@ -71,8 +77,6 @@ class CSVBatcher(BaseBatcher):
         Yields:
             A list of file paths (called a manifest).
         """
-        print("here!!!")
-
         sync_id = f"{self.tap_name}--{self.stream_name}-{uuid4()}"
         prefix = self.batch_config.storage.prefix or ""
         for i, chunk in enumerate(
@@ -82,18 +86,16 @@ class CSVBatcher(BaseBatcher):
             ),
             start=1,
         ):
-            print(chunk)
-            filename = f"{prefix}{sync_id}-{i}.csv.gz"
+            filename = f"{prefix}{sync_id}-{i}.csv"
             with self.batch_config.storage.fs(create=True) as fs:
                 # TODO: Determine compression from config.
-                with fs.open(filename, "wb") as f, gzip.GzipFile(
-                    fileobj=f,
-                    mode="wb",
-                ) as gz:
-                    gz.writelines(
-                        (self.__record_to_csv_line(record, self.schema, self.data_flattening_max_level) + "\n").encode()
-                        for record in chunk
-                    )
+                with fs.open(filename, "wb") as outfile:
+                    for record in chunk:
+                        csv_line = self._record_to_csv_line(record, self.schema, self.data_flattening_max_level)
+                        print(csv_line)
+                        outfile.write(bytes(csv_line + '\n', 'UTF-8'))
                 file_url = fs.geturl(filename)
-                print()
             yield [file_url]
+
+
+

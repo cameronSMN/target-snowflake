@@ -325,6 +325,14 @@ class SnowflakeConnector(SQLConnector):
             )
         if format == "col_alias":
             return f"({', '.join([col['clean_alias'] for col in column_selections])})"
+        
+        if format == "csv_casting":
+            return ", ".join(
+                [
+                    f"${i + 1} {col['clean_alias']}"
+                    for i, col in enumerate(column_selections)
+                ],
+            )
 
         error_message = f"Column format not implemented: {format}"
         raise NotImplementedError(error_message)
@@ -358,12 +366,25 @@ class SnowflakeConnector(SQLConnector):
         key_properties: Iterable[str],
     ):
         """Get Snowflake MERGE statement."""
+        file_type = 'csv'
         formatter = SnowflakeIdentifierPreparer(SnowflakeDialect())
         column_selections = self._get_column_selections(schema, formatter)
-        json_casting_selects = self._format_column_selections(
-            column_selections,
-            "json_casting",
-        )
+
+        if file_type == 'json':
+            json_casting_selects = self._format_column_selections(
+                column_selections,
+                "json_casting",
+            )
+        elif file_type == 'csv':
+            json_casting_selects = self._format_column_selections(
+                column_selections,
+                "csv_casting",
+            )      
+        else:
+            json_casting_selects = self._format_column_selections(
+                column_selections,
+                "json_casting",
+            )
 
         # use UPPER from here onwards
         formatted_properties = [formatter.format_collation(col) for col in schema["properties"]]
@@ -384,7 +405,8 @@ class SnowflakeConnector(SQLConnector):
             text(
                 f"merge into {full_table_name} d using "  # noqa: ISC003
                 + f"(select {json_casting_selects} from '@~/target-snowflake/{sync_id}'"  # noqa: S608
-                + f"(file_format => {file_format}) {dedup}) s "
+                #+ f"(file_format => {file_format}) {dedup}) s "
+                + f"(file_format => {file_format})) s "
                 + f"on {join_expr} "
                 + f"when matched then update set {matched_clause} "
                 + f"when not matched then insert ({not_matched_insert_cols}) "
@@ -392,6 +414,29 @@ class SnowflakeConnector(SQLConnector):
             ),
             {},
         )
+
+    def _get_merge_from_stage_statement_csv(self, 
+                        full_table_name: str,
+                        schema: dict,
+                        sync_id: str,
+                        file_format: str,
+                        columns: list,
+                        pk_merge_condition: str) -> str:
+        """Generate a CSV compatible snowflake MERGE INTO command"""
+        p_source_columns = ', '.join([f"{c['trans']}(${i + 1}) {c['name']}" for i, c in enumerate(columns)])
+        p_update = ', '.join([f"{c['name']}=s.{c['name']}" for c in columns])
+        p_insert_cols = ', '.join([c['name'] for c in columns])
+        p_insert_values = ', '.join([f"s.{c['name']}" for c in columns])
+
+        return f"MERGE INTO {full_table_name} t USING (" \
+            f"SELECT {p_source_columns} " \
+            f"FROM '@~/target-snowflake/{sync_id}'" \
+            f"(FILE_FORMAT => '{file_format}')) s " \
+            f"ON {pk_merge_condition} " \
+            f"WHEN MATCHED THEN UPDATE SET {p_update} " \
+            "WHEN NOT MATCHED THEN " \
+            f"INSERT ({p_insert_cols}) " \
+            f"VALUES ({p_insert_values})"
 
     def _get_copy_statement(self, full_table_name, schema, sync_id, file_format):  # noqa: ANN202, ANN001
         """Get Snowflake COPY statement."""
