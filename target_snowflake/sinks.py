@@ -6,6 +6,10 @@ import typing as t
 from urllib.parse import urlparse
 from uuid import uuid4
 
+# CJT
+from target_snowflake.batch_encoder_csv import CSVBatcher
+
+
 from singer_sdk.batch import JSONLinesBatcher
 from singer_sdk.helpers._batch import (
     BaseBatchFileEncoding,
@@ -140,13 +144,29 @@ class SnowflakeSink(SQLSink):
 
         # serialize to batch files and upload
         # TODO: support other batchers
-        batcher = JSONLinesBatcher(
-            tap_name=self.target.name,
-            stream_name=self.stream_name,
-            batch_config=self.batch_config,
-        )
+        file_type = 'csv'
+        if file_type == 'json':
+            batcher = JSONLinesBatcher(
+                tap_name=self.target.name,
+                stream_name=self.stream_name,
+                batch_config=self.batch_config,
+            )
+        elif file_type == 'csv':
+            batcher = CSVBatcher(
+                tap_name=self.target.name,
+                stream_name=self.stream_name,
+                batch_config=self.batch_config,
+                schema=schema
+            )
+        else:
+            msg = f"Unsupported file_type: {file_type}"
+            raise NotImplementedError(
+                msg,
+            )        
+
         batches = batcher.get_batches(records=processed_records)
         for files in batches:
+            print(files)
             self.insert_batch_files_via_internal_stage(
                 full_table_name=full_table_name,
                 files=files,

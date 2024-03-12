@@ -415,10 +415,18 @@ class SnowflakeConnector(SQLConnector):
             {},
         )
 
-    def _get_file_format_statement(self, file_format):  # noqa: ANN202, ANN001
+    def _get_file_format_statement(self, file_format, file_type='csv'):  # noqa: ANN202, ANN001
         """Get Snowflake CREATE FILE FORMAT statement."""
+        if file_type == 'json':
+            format_statement = f"create or replace file format {file_format}type = 'JSON' compression = 'AUTO'"
+        elif file_type == 'csv':
+            format_statement = f"create or replace file format {file_format}TYPE = 'CSV' ESCAPE='\\\\' FIELD_OPTIONALLY_ENCLOSED_BY='\"'"
+        else:
+            format_statement = f"create or replace file format {file_format}type = 'JSON' compression = 'AUTO'"
+        
+        print(text(format_statement))
         return (
-            text(f"create or replace file format {file_format}type = 'JSON' compression = 'AUTO'"),
+            text(format_statement),
             {},
         )
 

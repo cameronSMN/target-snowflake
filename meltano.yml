@@ -11,8 +11,6 @@ plugins:
     - about
     - schema-flattening
     - stream-maps
-    config:
-      start_date: '2010-01-01T00:00:00Z'
     settings:
     - description: Your account identifier. See [Account Identifiers](https://docs.snowflake.com/en/user-guide/admin-account-identifier.html).
       kind: string
@@ -82,8 +80,15 @@ plugins:
       kind: string
       label: Warehouse
       name: warehouse
+    - name: hard_delete
+      kind: boolean
+      value: false
     settings_group_validation:
     - - account
       - database
       - password
       - user
+    config:
+      start_date: '2010-01-01T00:00:00Z'
+      add_record_metadata: true
+      hard_delete: false
