@@ -86,14 +86,22 @@ class CSVBatcher(BaseBatcher):
             ),
             start=1,
         ):
-            filename = f"{prefix}{sync_id}-{i}.csv"
+            filename = f"{prefix}{sync_id}-{i}.csv.gz"
             with self.batch_config.storage.fs(create=True) as fs:
                 # TODO: Determine compression from config.
-                with fs.open(filename, "wb") as outfile:
+                # with fs.open(filename, "wb") as outfile:
+                #     for record in chunk:
+                #         csv_line = self._record_to_csv_line(record, self.schema, self.data_flattening_max_level)
+                #         outfile.write(bytes(csv_line + '\n', 'UTF-8'))
+
+                with fs.open(filename, "wb") as f, gzip.GzipFile(
+                    fileobj=f,
+                    mode="wb",
+                ) as gz:
                     for record in chunk:
                         csv_line = self._record_to_csv_line(record, self.schema, self.data_flattening_max_level)
-                        print(csv_line)
-                        outfile.write(bytes(csv_line + '\n', 'UTF-8'))
+                        gz.write(bytes(csv_line + '\n', 'UTF-8'))
+                    
                 file_url = fs.geturl(filename)
             yield [file_url]
 
