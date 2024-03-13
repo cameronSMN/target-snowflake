@@ -131,6 +131,7 @@ class SnowflakeSink(SQLSink):
             True if table exists, False if not, None if unsure or undetectable.
         """
         # prepare records for serialization
+        self.logger.info("CJT: START: Preparing records for serialisation...")
         processed_records = (
             conform_record_data_types(
                 stream_name=self.stream_name,
@@ -141,17 +142,18 @@ class SnowflakeSink(SQLSink):
             )
             for rcd in records
         )
+        self.logger.info("CJT: STOP: Preparing records for serialisation...")
 
         # serialize to batch files and upload
         # TODO: support other batchers
-        file_type = 'csv'
-        if file_type == 'json':
+        file_format_type = self.config.get("file_format_type")
+        if file_format_type == 'json':
             batcher = JSONLinesBatcher(
                 tap_name=self.target.name,
                 stream_name=self.stream_name,
                 batch_config=self.batch_config,
             )
-        elif file_type == 'csv':
+        elif file_format_type == 'csv':
             batcher = CSVBatcher(
                 tap_name=self.target.name,
                 stream_name=self.stream_name,
@@ -159,7 +161,7 @@ class SnowflakeSink(SQLSink):
                 schema=schema
             )
         else:
-            msg = f"Unsupported file_type: {file_type}"
+            msg = f"Unsupported file_format_type: {file_format_type}"
             raise NotImplementedError(
                 msg,
             )        

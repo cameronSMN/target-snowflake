@@ -366,16 +366,16 @@ class SnowflakeConnector(SQLConnector):
         key_properties: Iterable[str],
     ):
         """Get Snowflake MERGE statement."""
-        file_type = 'csv'
+        file_format_type = self.config.get("file_format_type")
         formatter = SnowflakeIdentifierPreparer(SnowflakeDialect())
         column_selections = self._get_column_selections(schema, formatter)
 
-        if file_type == 'json':
+        if file_format_type == 'json':
             json_casting_selects = self._format_column_selections(
                 column_selections,
                 "json_casting",
             )
-        elif file_type == 'csv':
+        elif file_format_type == 'csv':
             json_casting_selects = self._format_column_selections(
                 column_selections,
                 "csv_casting",
@@ -460,11 +460,12 @@ class SnowflakeConnector(SQLConnector):
             {},
         )
 
-    def _get_file_format_statement(self, file_format, file_type='csv'):  # noqa: ANN202, ANN001
+    def _get_file_format_statement(self, file_format):  # noqa: ANN202, ANN001
         """Get Snowflake CREATE FILE FORMAT statement."""
-        if file_type == 'json':
+        file_format_type = self.config.get("file_format_type")
+        if file_format_type == 'json':
             format_statement = f"create or replace file format {file_format}type = 'JSON' compression = 'AUTO'"
-        elif file_type == 'csv':
+        elif file_format_type == 'csv':
             format_statement = f"create or replace file format {file_format}TYPE = 'CSV' ESCAPE='\\\\' FIELD_OPTIONALLY_ENCLOSED_BY='\"'"
         else:
             format_statement = f"create or replace file format {file_format}type = 'JSON' compression = 'AUTO'"

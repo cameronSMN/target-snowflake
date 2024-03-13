@@ -79,6 +79,18 @@ class TargetSnowflake(SQLTarget):
             default=True,
             description="Whether to remove batch files after processing.",
         ),
+        th.Property(
+            "file_format_type",
+            th.StringType,
+            default="json",
+            description="The type of file used to stage data to Snowflake",
+        ),
+        # th.Property(
+        #     "batch_size",
+        #     th.IntegerType,
+        #     default=10000,
+        #     description="The batch size",
+        # ),
     ).to_dict()
 
     default_sink_class = SnowflakeSink

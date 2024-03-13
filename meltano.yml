@@ -83,6 +83,9 @@ plugins:
     - name: hard_delete
       kind: boolean
       value: false
+    - name: file_format_type
+      kind: string
+      value: json
     settings_group_validation:
     - - account
       - database
@@ -92,3 +95,4 @@ plugins:
       start_date: '2010-01-01T00:00:00Z'
       add_record_metadata: true
       hard_delete: false
+      file_format_type: json
