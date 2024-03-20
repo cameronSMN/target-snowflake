@@ -9,6 +9,14 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from singer_sdk import typing as th
 from singer_sdk.connectors import SQLConnector
+
+# DOPE-specific imports
+from dope.dope_config import get_project_name
+from dope.dope_state import get_workspace_name
+from dope.lib import fully_qualified_database_name
+from dope.session import get_session
+from dope.snowflake import get_db_info
+
 from snowflake.sqlalchemy import URL
 from snowflake.sqlalchemy.base import SnowflakeIdentifierPreparer
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
@@ -59,6 +67,20 @@ class SnowflakeConnector(SQLConnector):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.table_cache: dict = {}
         self.schema_cache: dict = {}
+
+        # Added to support DOPE
+        config = kwargs.get("config",{})
+        config["authenticate_with_dope"] = True
+        if config["authenticate_with_dope"]:
+            db = str(config.get('database'))
+            project_name = get_project_name()
+            workspace_name = get_workspace_name()
+            if not workspace_name:
+                raise RuntimeError
+
+            config["database"] = fully_qualified_database_name(project_name, workspace_name, db)
+            kwargs["config"] = config
+
         super().__init__(*args, **kwargs)
 
     def get_table_columns(
@@ -149,30 +171,40 @@ class SnowflakeConnector(SQLConnector):
                 "QUOTED_IDENTIFIERS_IGNORE_CASE": "TRUE",
             },
         }
-        if "private_key_path" in self.config:
-            with open(self.config["private_key_path"], "rb") as private_key_file:  # noqa: PTH123
-                private_key = serialization.load_pem_private_key(
-                    private_key_file.read(),
-                    password=self.config["private_key_passphrase"].encode()
-                    if "private_key_passphrase" in self.config
-                    else None,
-                    backend=default_backend(),
-                )
-                connect_args["private_key"] = private_key.private_bytes(
-                    encoding=serialization.Encoding.DER,
-                    format=serialization.PrivateFormat.PKCS8,
-                    encryption_algorithm=serialization.NoEncryption(),
-                )
-        engine = sqlalchemy.create_engine(
-            self.sqlalchemy_url,
-            connect_args=connect_args,
-            echo=False,
-        )
-        connection = engine.connect()
-        db_names = [db[1] for db in connection.execute(text("SHOW DATABASES;")).fetchall()]
-        if self.config["database"] not in db_names:
-            msg = f"Database '{self.config['database']}' does not exist or the user/role doesn't have access to it."
-            raise Exception(msg)  # noqa: TRY002
+        # If using DOPE
+        if self.config.get("authenticate_with_dope"):
+            engine = sqlalchemy.create_engine("snowflake://",  creator=lambda: get_session().snowflake_connection(database=self.config['database']), future=True)
+            
+            with get_session().snowflake_connection() as connection, connection.cursor() as cs:
+                if self.config['database'] not in [db[3] for db in get_db_info(cs)]:
+                    raise Exception(f"Database '{self.config['database']}' does not exist or the current user context does not have access to it.")
+
+        # Otherwise default to standard behaviour
+        else:
+            if "private_key_path" in self.config:
+                with open(self.config["private_key_path"], "rb") as private_key_file:  # noqa: PTH123
+                    private_key = serialization.load_pem_private_key(
+                        private_key_file.read(),
+                        password=self.config["private_key_passphrase"].encode()
+                        if "private_key_passphrase" in self.config
+                        else None,
+                        backend=default_backend(),
+                    )
+                    connect_args["private_key"] = private_key.private_bytes(
+                        encoding=serialization.Encoding.DER,
+                        format=serialization.PrivateFormat.PKCS8,
+                        encryption_algorithm=serialization.NoEncryption(),
+                    )
+            engine = sqlalchemy.create_engine(
+                self.sqlalchemy_url,
+                connect_args=connect_args,
+                echo=False,
+            )
+            connection = engine.connect()
+            db_names = [db[1] for db in connection.execute(text("SHOW DATABASES;")).fetchall()]
+            if self.config["database"] not in db_names:
+                msg = f"Database '{self.config['database']}' does not exist or the user/role doesn't have access to it."
+                raise Exception(msg)  # noqa: TRY002
         return engine
 
     def prepare_column(
@@ -295,6 +327,18 @@ class SnowflakeConnector(SQLConnector):
 
         return cast(sqlalchemy.types.TypeEngine, target_type)
 
+    def create_schema(self, schema_name):
+        """
+        Create a schema using the Dataplatform procedure at DATAPLATFORM
+
+        Customisation for DOPE
+        """  
+        self.logger.info(f"Creating schema {schema_name} through Dataplatform procedure at DATAPLATFORM")
+        with self._connect() as conn:
+            cs = conn.engine.raw_connection().cursor()
+            from dope.snowflake import create_schema
+            create_schema(cs, self.config['database'], schema_name)
+            cs.close()
     def schema_exists(self, schema_name: str) -> bool:
         if schema_name in self.schema_cache:
             return True
