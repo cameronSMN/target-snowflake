@@ -59,8 +59,15 @@ class SnowflakeSink(SQLSink):
 
     @property
     def database_name(self) -> str | None:
-        db = super().database_name or self.config.get("database")
-        return db.upper() if db else None
+
+        # If DOPE then get custom database from connector.config 
+        if self.connector.config.get("authenticate_with_dope"):
+            return self.connector.config.get("database")
+
+        # Default behaviour
+        else:
+            db = super().database_name or self.config.get("database")    
+            return db.upper() if db else None
 
     @property
     def table_name(self) -> str:

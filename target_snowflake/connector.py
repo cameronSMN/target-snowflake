@@ -64,24 +64,33 @@ class SnowflakeConnector(SQLConnector):
     allow_merge_upsert: bool = False  # Whether MERGE UPSERT is supported.
     allow_temp_tables: bool = True  # Whether temp tables are supported.
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self,
+        config: dict | None = None,
+        sqlalchemy_url: str | None = None) -> None:
+
         self.table_cache: dict = {}
         self.schema_cache: dict = {}
 
+        config = config or {}
+
         # Added to support DOPE
-        config = kwargs.get("config",{})
+        self.logger.info(f"Creating engine using DOPE!!!!")
+
         config["authenticate_with_dope"] = True
         if config["authenticate_with_dope"]:
             db = str(config.get('database'))
             project_name = get_project_name()
             workspace_name = get_workspace_name()
+            self.logger.info(workspace_name)
+            self.logger.info(project_name)
+
             if not workspace_name:
                 raise RuntimeError
 
             config["database"] = fully_qualified_database_name(project_name, workspace_name, db)
-            kwargs["config"] = config
+            self.logger.info(config)
 
-        super().__init__(*args, **kwargs)
+        super().__init__(config, sqlalchemy_url)
 
     def get_table_columns(
         self,
@@ -171,8 +180,12 @@ class SnowflakeConnector(SQLConnector):
                 "QUOTED_IDENTIFIERS_IGNORE_CASE": "TRUE",
             },
         }
+
         # If using DOPE
         if self.config.get("authenticate_with_dope"):
+            self.logger.info(f"Creating engine using DOPE!!!!")
+            self.logger.info(self.config)
+
             engine = sqlalchemy.create_engine("snowflake://",  creator=lambda: get_session().snowflake_connection(database=self.config['database']), future=True)
             
             with get_session().snowflake_connection() as connection, connection.cursor() as cs:
@@ -356,7 +369,8 @@ class SnowflakeConnector(SQLConnector):
 
     def _get_put_statement(self, sync_id: str, file_uri: str) -> tuple[text, dict]:  # noqa: ARG002
         """Get Snowflake PUT statement."""
-        return (text(f"put :file_uri '@~/target-snowflake/{sync_id}'"), {})
+        # return (text(f"put :file_uri '@~/target-snowflake/{sync_id}'"), {})
+        return (text(f"put {file_uri} '@~/target-snowflake--{sync_id}'"), {})
 
     @staticmethod
     def _format_column_selections(column_selections: list, format: str) -> str:  # noqa: A002
@@ -489,6 +503,10 @@ class SnowflakeConnector(SQLConnector):
             sync_id: The sync ID for the batch.
             files: The files containing records to upload.
         """
+        self.logger.info(f"Putting the data files into the internal stage with sync id: {sync_id} ")
+        for file_uri in files:
+            self.logger.info(f"Data file: {file_uri}")
+
         with self._connect() as conn:
             for file_uri in files:
                 put_statement, kwargs = self._get_put_statement(
@@ -497,7 +515,11 @@ class SnowflakeConnector(SQLConnector):
                 )
                 # sqlalchemy.text stripped a slash, which caused windows to fail so we used bound parameters instead
                 # See https://github.com/MeltanoLabs/target-snowflake/issues/87 for more information about this error
-                conn.execute(put_statement, file_uri=file_uri, **kwargs)
+                self.logger.info(f"DUDE HERE MAN!!")
+                self.logger.info(put_statement)
+                self.logger.info(kwargs)
+
+                conn.execute(put_statement, **kwargs)
 
     def create_file_format(self, file_format: str) -> None:
         """Create a file format in the schema.

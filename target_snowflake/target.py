@@ -19,8 +19,8 @@ class TargetSnowflake(SQLTarget):
         th.Property(
             "user",
             th.StringType,
-            required=True,
-            description="The login name for your Snowflake user.",
+            required=False,
+            description="The login name for your Snowflake user. Required unless authenticating with DOPE.",
         ),
         th.Property(
             "password",
@@ -43,8 +43,8 @@ class TargetSnowflake(SQLTarget):
         th.Property(
             "account",
             th.StringType,
-            required=True,
-            description="Your account identifier. See [Account Identifiers](https://docs.snowflake.com/en/user-guide/admin-account-identifier.html).",
+            required=False,     
+            description="Your account identifier. Not required if authenticating with DOPE otherwise required. See [Account Identifiers](https://docs.snowflake.com/en/user-guide/admin-account-identifier.html).",
         ),
         th.Property(
             "database",
