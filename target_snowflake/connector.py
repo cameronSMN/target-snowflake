@@ -74,10 +74,9 @@ class SnowflakeConnector(SQLConnector):
         config = config or {}
 
         # Added to support DOPE
-        self.logger.info(f"Creating engine using DOPE!!!!")
 
-        config["authenticate_with_dope"] = True
         if config["authenticate_with_dope"]:
+            self.logger.info("Authenticating with DOPE.")
             db = str(config.get('database'))
             project_name = get_project_name()
             workspace_name = get_workspace_name()
@@ -515,10 +514,6 @@ class SnowflakeConnector(SQLConnector):
                 )
                 # sqlalchemy.text stripped a slash, which caused windows to fail so we used bound parameters instead
                 # See https://github.com/MeltanoLabs/target-snowflake/issues/87 for more information about this error
-                self.logger.info(f"DUDE HERE MAN!!")
-                self.logger.info(put_statement)
-                self.logger.info(kwargs)
-
                 conn.execute(put_statement, **kwargs)
 
     def create_file_format(self, file_format: str) -> None:

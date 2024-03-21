@@ -79,6 +79,14 @@ class TargetSnowflake(SQLTarget):
             default=True,
             description="Whether to remove batch files after processing.",
         ),
+        th.Property(
+            "authenticate_with_dope",
+            th.BooleanType,
+            default=True,
+            required=False,
+            description="Whether to authenticate using DOPE or use the default methods from the meltanolabs plugin",
+        ),
+        
     ).to_dict()
 
     default_sink_class = SnowflakeSink
